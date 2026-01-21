@@ -440,8 +440,8 @@ app.layout = html.Div([
                 ),
                 dcc.Input(
                     id='search-date',
-                    placeholder='Date',
-                    type='date',
+                    placeholder='YYYY-MM-DD',
+                    type='text',
                     className='search-input',
                     style={'flex': '1', 'minWidth': '150px'}
                 ),
@@ -516,11 +516,11 @@ app.layout = html.Div([
                                 ], style={'marginBottom': '15px'}),
                                 html.Div([
                                     html.Label("Departure Time", className='form-label'),
-                                    dcc.Input(id='train-dept', type='time', className='form-input')
+                                    dcc.Input(id='train-dept', type='text', placeholder='HH:MM (e.g., 08:30)', className='form-input')
                                 ], style={'marginBottom': '15px'}),
                                 html.Div([
                                     html.Label("Arrival Time", className='form-label'),
-                                    dcc.Input(id='train-arr', type='time', className='form-input')
+                                    dcc.Input(id='train-arr', type='text', placeholder='HH:MM (e.g., 10:45)', className='form-input')
                                 ], style={'marginBottom': '15px'}),
                                 html.Div([
                                     html.Label("Total Capacity", className='form-label'),
