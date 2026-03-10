@@ -21,8 +21,12 @@ conn = sqlite3.connect('metro_web.db', check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("CREATE TABLE IF NOT EXISTS trains (train_id TEXT PRIMARY KEY, train_name TEXT, source TEXT, destination TEXT, departure_time TEXT, arrival_time TEXT, capacity INTEGER, available_seats INTEGER)")
+cursor.execute("CREATE TABLE IF NOT EXISTS buses (bus_id TEXT PRIMARY KEY, bus_name TEXT, source TEXT, destination TEXT, departure_time TEXT, arrival_time TEXT, capacity INTEGER, available_seats INTEGER)")
+cursor.execute("CREATE TABLE IF NOT EXISTS metros (metro_id TEXT PRIMARY KEY, metro_name TEXT, source TEXT, destination TEXT, departure_time TEXT, arrival_time TEXT, capacity INTEGER, available_seats INTEGER)")
 cursor.execute("CREATE TABLE IF NOT EXISTS commuters (commuter_id TEXT PRIMARY KEY, name TEXT, email TEXT, phone TEXT)")
 cursor.execute("CREATE TABLE IF NOT EXISTS bookings (booking_id TEXT PRIMARY KEY, commuter_id TEXT, train_id TEXT, booking_date TEXT, status TEXT)")
+cursor.execute("CREATE TABLE IF NOT EXISTS bus_bookings (bus_booking_id TEXT PRIMARY KEY, commuter_id TEXT, bus_id TEXT, booking_date TEXT, status TEXT)")
+cursor.execute("CREATE TABLE IF NOT EXISTS metro_bookings (metro_booking_id TEXT PRIMARY KEY, commuter_id TEXT, metro_id TEXT, booking_date TEXT, status TEXT)")
 conn.commit()
 
 # App Setup
@@ -452,17 +456,47 @@ app.layout = html.Div([
     
     # Main Content
     html.Div([
-        # Dashboard Stats
+        # Advanced Dashboard Stats
         html.Div([
-            html.H2("Dashboard Overview", className='section-title'),
+            html.H2("📊 Dashboard Overview", className='section-title'),
             html.Div(id='stats-container', className='stats-grid')
         ], className='container', style={'marginBottom': '40px'}),
+        
+        # Charts Section
+        html.Div([
+            html.H2("📈 Analytics & Reports", className='section-title'),
+            html.Div([
+                html.Div([
+                    dcc.Graph(id='capacity-chart', style={'height': '400px'})
+                ], style={'flex': '1', 'minWidth': '45%', 'marginRight': '20px'}),
+                html.Div([
+                    dcc.Graph(id='bookings-chart', style={'height': '400px'})
+                ], style={'flex': '1', 'minWidth': '45%'})
+            ], style={'display': 'flex', 'gap': '20px', 'flexWrap': 'wrap', 'marginBottom': '30px'}),
+            
+            html.Div([
+                html.Div([
+                    dcc.Graph(id='availability-chart', style={'height': '400px'})
+                ], style={'flex': '1', 'minWidth': '45%', 'marginRight': '20px'}),
+                html.Div([
+                    dcc.Graph(id='transport-distribution', style={'height': '400px'})
+                ], style={'flex': '1', 'minWidth': '45%'})
+            ], style={'display': 'flex', 'gap': '20px', 'flexWrap': 'wrap'})
+        ], className='container', style={'marginBottom': '40px', 'backgroundColor': '#f8f9fa', 'padding': '30px', 'borderRadius': '12px'}),
         
         # Tabs Section
         html.Div([
             dcc.Tabs([
-                dcc.Tab(label='🚇 Available Trains', children=[
+                dcc.Tab(label='🚂 Trains', children=[
                     html.Div(id='trains-list', className='tab-content')
+                ], className='tabs-section'),
+                
+                dcc.Tab(label='🚌 Buses', children=[
+                    html.Div(id='buses-list', className='tab-content')
+                ], className='tabs-section'),
+                
+                dcc.Tab(label='🚇 Metro', children=[
+                    html.Div(id='metros-list', className='tab-content')
                 ], className='tabs-section'),
                 
                 dcc.Tab(label='👥 Add Commuter', children=[
@@ -533,6 +567,86 @@ app.layout = html.Div([
                     ], className='tab-content')
                 ]),
                 
+                dcc.Tab(label='➕ Add Bus', children=[
+                    html.Div([
+                        html.Div([
+                            html.H3("Add New Bus", style={'marginBottom': '20px', 'color': '#0f3460'}),
+                            html.Div([
+                                html.Div([
+                                    html.Label("Bus ID", className='form-label'),
+                                    dcc.Input(id='bus-id', type='text', placeholder='Enter Bus ID', className='form-input')
+                                ], style={'marginBottom': '15px'}),
+                                html.Div([
+                                    html.Label("Bus Name", className='form-label'),
+                                    dcc.Input(id='bus-name', type='text', placeholder='Enter Bus Name', className='form-input')
+                                ], style={'marginBottom': '15px'}),
+                                html.Div([
+                                    html.Label("From Station", className='form-label'),
+                                    dcc.Input(id='bus-from', type='text', placeholder='Enter Source', className='form-input')
+                                ], style={'marginBottom': '15px'}),
+                                html.Div([
+                                    html.Label("To Station", className='form-label'),
+                                    dcc.Input(id='bus-to', type='text', placeholder='Enter Destination', className='form-input')
+                                ], style={'marginBottom': '15px'}),
+                                html.Div([
+                                    html.Label("Departure Time", className='form-label'),
+                                    dcc.Input(id='bus-dept', type='text', placeholder='HH:MM (e.g., 08:30)', className='form-input')
+                                ], style={'marginBottom': '15px'}),
+                                html.Div([
+                                    html.Label("Arrival Time", className='form-label'),
+                                    dcc.Input(id='bus-arr', type='text', placeholder='HH:MM (e.g., 10:45)', className='form-input')
+                                ], style={'marginBottom': '15px'}),
+                                html.Div([
+                                    html.Label("Total Capacity", className='form-label'),
+                                    dcc.Input(id='bus-capacity', type='number', placeholder='Enter Capacity', className='form-input')
+                                ], style={'marginBottom': '20px'}),
+                                html.Button('Add Bus', id='add-bus-btn', className='btn-submit'),
+                                html.Div(id='bus-msg', className='message', style={'display': 'none'})
+                            ])
+                        ], style={'maxWidth': '500px', 'margin': '0 auto'})
+                    ], className='tab-content')
+                ]),
+                
+                dcc.Tab(label='➕ Add Metro', children=[
+                    html.Div([
+                        html.Div([
+                            html.H3("Add New Metro", style={'marginBottom': '20px', 'color': '#0f3460'}),
+                            html.Div([
+                                html.Div([
+                                    html.Label("Metro ID", className='form-label'),
+                                    dcc.Input(id='metro-id', type='text', placeholder='Enter Metro ID', className='form-input')
+                                ], style={'marginBottom': '15px'}),
+                                html.Div([
+                                    html.Label("Metro Line Name", className='form-label'),
+                                    dcc.Input(id='metro-name', type='text', placeholder='Enter Metro Line Name', className='form-input')
+                                ], style={'marginBottom': '15px'}),
+                                html.Div([
+                                    html.Label("From Station", className='form-label'),
+                                    dcc.Input(id='metro-from', type='text', placeholder='Enter Source', className='form-input')
+                                ], style={'marginBottom': '15px'}),
+                                html.Div([
+                                    html.Label("To Station", className='form-label'),
+                                    dcc.Input(id='metro-to', type='text', placeholder='Enter Destination', className='form-input')
+                                ], style={'marginBottom': '15px'}),
+                                html.Div([
+                                    html.Label("Departure Time", className='form-label'),
+                                    dcc.Input(id='metro-dept', type='text', placeholder='HH:MM (e.g., 08:30)', className='form-input')
+                                ], style={'marginBottom': '15px'}),
+                                html.Div([
+                                    html.Label("Arrival Time", className='form-label'),
+                                    dcc.Input(id='metro-arr', type='text', placeholder='HH:MM (e.g., 10:45)', className='form-input')
+                                ], style={'marginBottom': '15px'}),
+                                html.Div([
+                                    html.Label("Total Capacity", className='form-label'),
+                                    dcc.Input(id='metro-capacity', type='number', placeholder='Enter Capacity', className='form-input')
+                                ], style={'marginBottom': '20px'}),
+                                html.Button('Add Metro', id='add-metro-btn', className='btn-submit'),
+                                html.Div(id='metro-msg', className='message', style={'display': 'none'})
+                            ])
+                        ], style={'maxWidth': '500px', 'margin': '0 auto'})
+                    ], className='tab-content')
+                ]),
+                
                 dcc.Tab(label='🎫 Book Ticket', children=[
                     html.Div([
                         html.Div([
@@ -552,6 +666,23 @@ app.layout = html.Div([
                                 ], style={'marginBottom': '20px'}),
                                 html.Button('Book Ticket', id='add-booking-btn', className='btn-submit'),
                                 html.Div(id='booking-msg', className='message', style={'display': 'none'})
+                            ])
+                        ], style={'maxWidth': '500px', 'margin': '0 auto'})
+                    ], className='tab-content')
+                ]),
+                
+                dcc.Tab(label='🗑️ Delete Train', children=[
+                    html.Div([
+                        html.Div([
+                            html.H3("Delete Train", style={'marginBottom': '20px', 'color': '#0f3460'}),
+                            html.Div([
+                                html.Div([
+                                    html.Label("Train ID", className='form-label'),
+                                    dcc.Input(id='delete-train-id', type='text', placeholder='Enter Train ID to delete', className='form-input')
+                                ], style={'marginBottom': '20px'}),
+                                html.Button('Delete Train', id='delete-train-btn', className='btn-submit', 
+                                          style={'background': '#e74c3c', 'borderColor': '#c0392b'}),
+                                html.Div(id='delete-train-msg', className='message', style={'display': 'none'})
                             ])
                         ], style={'maxWidth': '500px', 'margin': '0 auto'})
                     ], className='tab-content')
@@ -578,25 +709,163 @@ app.layout = html.Div([
 def update_stats(n):
     cursor.execute("SELECT COUNT(*) FROM trains")
     trains_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM buses")
+    buses_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM metros")
+    metros_count = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(*) FROM commuters")
     commuters_count = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(*) FROM bookings")
-    bookings_count = cursor.fetchone()[0]
+    train_bookings = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM bus_bookings")
+    bus_bookings = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM metro_bookings")
+    metro_bookings = cursor.fetchone()[0]
+    cursor.execute("SELECT SUM(capacity) FROM trains")
+    total_train_capacity = cursor.fetchone()[0] or 0
+    cursor.execute("SELECT SUM(available_seats) FROM trains")
+    available_train_seats = cursor.fetchone()[0] or 0
+    
+    total_bookings = train_bookings + bus_bookings + metro_bookings
     
     return [
         html.Div([
+            html.Div("🚂", style={'fontSize': '32px', 'marginBottom': '10px'}),
             html.Div(trains_count, className='stat-value'),
             html.Div("Active Trains", className='stat-label')
         ], className='stat-card'),
         html.Div([
-            html.Div(commuters_count, className='stat-value'),
-            html.Div("Registered Commuters", className='stat-label')
+            html.Div("🚌", style={'fontSize': '32px', 'marginBottom': '10px'}),
+            html.Div(buses_count, className='stat-value'),
+            html.Div("Active Buses", className='stat-label')
         ], className='stat-card'),
         html.Div([
-            html.Div(bookings_count, className='stat-value'),
+            html.Div("🚇", style={'fontSize': '32px', 'marginBottom': '10px'}),
+            html.Div(metros_count, className='stat-value'),
+            html.Div("Metro Services", className='stat-label')
+        ], className='stat-card'),
+        html.Div([
+            html.Div("👥", style={'fontSize': '32px', 'marginBottom': '10px'}),
+            html.Div(commuters_count, className='stat-value'),
+            html.Div("Registered Users", className='stat-label')
+        ], className='stat-card'),
+        html.Div([
+            html.Div("🎫", style={'fontSize': '32px', 'marginBottom': '10px'}),
+            html.Div(total_bookings, className='stat-value'),
             html.Div("Total Bookings", className='stat-label')
         ], className='stat-card'),
+        html.Div([
+            html.Div("💺", style={'fontSize': '32px', 'marginBottom': '10px'}),
+            html.Div(f"{available_train_seats}/{total_train_capacity}", className='stat-value'),
+            html.Div("Seats Available", className='stat-label')
+        ], className='stat-card'),
     ]
+
+@callback(
+    Output('capacity-chart', 'figure'),
+    Input('search-btn', 'n_clicks'),
+    prevent_initial_call=False
+)
+def update_capacity_chart(n):
+    try:
+        df_trains = pd.read_sql('SELECT train_name, capacity, available_seats FROM trains', conn)
+        if df_trains.empty:
+            return go.Figure().add_annotation(text="No train data available")
+        
+        fig = go.Figure(data=[
+            go.Bar(name='Available', x=df_trains['train_name'], y=df_trains['available_seats'], marker_color='#27ae60'),
+            go.Bar(name='Booked', x=df_trains['train_name'], y=df_trains['capacity']-df_trains['available_seats'], marker_color='#e74c3c')
+        ])
+        fig.update_layout(barmode='stack', title='Train Capacity & Availability', height=400, 
+                         template='plotly_white', font=dict(family='Poppins'))
+        return fig
+    except:
+        return go.Figure().add_annotation(text="Error loading data")
+
+@callback(
+    Output('bookings-chart', 'figure'),
+    Input('search-btn', 'n_clicks'),
+    prevent_initial_call=False
+)
+def update_bookings_chart(n):
+    try:
+        cursor.execute("SELECT COUNT(*) FROM bookings")
+        train_bookings = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM bus_bookings")
+        bus_bookings = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM metro_bookings")
+        metro_bookings = cursor.fetchone()[0]
+        
+        bookings_data = {
+            'Transport Type': ['Trains', 'Buses', 'Metro'],
+            'Bookings': [train_bookings, bus_bookings, metro_bookings]
+        }
+        df = pd.DataFrame(bookings_data)
+        
+        fig = go.Figure(data=[go.Pie(labels=df['Transport Type'], values=df['Bookings'],
+                                     marker=dict(colors=['#667eea', '#e74c3c', '#764ba2']))])
+        fig.update_layout(title='Bookings by Transport Type', height=400, font=dict(family='Poppins'))
+        return fig
+    except:
+        return go.Figure().add_annotation(text="Error loading bookings")
+
+@callback(
+    Output('availability-chart', 'figure'),
+    Input('search-btn', 'n_clicks'),
+    prevent_initial_call=False
+)
+def update_availability_chart(n):
+    try:
+        cursor.execute("SELECT SUM(capacity) as capacity, SUM(available_seats) as available FROM trains")
+        trains_data = cursor.fetchone()
+        cursor.execute("SELECT SUM(capacity) as capacity, SUM(available_seats) as available FROM buses")
+        buses_data = cursor.fetchone()
+        cursor.execute("SELECT SUM(capacity) as capacity, SUM(available_seats) as available FROM metros")
+        metros_data = cursor.fetchone()
+        
+        transport_types = ['Trains', 'Buses', 'Metro']
+        capacities = [trains_data[0] or 0, buses_data[0] or 0, metros_data[0] or 0]
+        available = [trains_data[1] or 0, buses_data[1] or 0, metros_data[1] or 0]
+        booked = [capacities[i] - available[i] for i in range(3)]
+        
+        fig = go.Figure(data=[
+            go.Bar(name='Booked', x=transport_types, y=booked, marker_color='#e74c3c'),
+            go.Bar(name='Available', x=transport_types, y=available, marker_color='#27ae60')
+        ])
+        fig.update_layout(barmode='stack', title='Seat Availability Across All Transport', height=400,
+                         template='plotly_white', font=dict(family='Poppins'))
+        return fig
+    except:
+        return go.Figure().add_annotation(text="Error loading availability data")
+
+@callback(
+    Output('transport-distribution', 'figure'),
+    Input('search-btn', 'n_clicks'),
+    prevent_initial_call=False
+)
+def update_transport_chart(n):
+    try:
+        cursor.execute("SELECT COUNT(*) FROM trains")
+        trains = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM buses")
+        buses = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM metros")
+        metros = cursor.fetchone()[0]
+        
+        transport_data = {
+            'Type': ['Trains', 'Buses', 'Metro'],
+            'Count': [trains, buses, metros]
+        }
+        df = pd.DataFrame(transport_data)
+        
+        fig = go.Figure(data=[go.Bar(x=df['Type'], y=df['Count'],
+                                     marker=dict(color=['#667eea', '#e74c3c', '#764ba2']))])
+        fig.update_layout(title='Transport Services Count', height=400,
+                         template='plotly_white', font=dict(family='Poppins'),
+                         showlegend=False)
+        return fig
+    except:
+        return go.Figure().add_annotation(text="Error loading distribution data")
 
 @callback(
     Output('trains-list', 'children'),
@@ -705,6 +974,149 @@ def add_booking(n, bid, cid, tid):
             return "✅ Ticket booked successfully!", {'display': 'block'}
         except:
             return "❌ Booking ID already exists!", {'display': 'block'}
+    return "", {'display': 'none'}
+
+@callback(
+    Output('delete-train-msg', 'children'),
+    Output('delete-train-msg', 'style'),
+    Input('delete-train-btn', 'n_clicks'),
+    State('delete-train-id', 'value'),
+    prevent_initial_call=True
+)
+def delete_train(n, tid):
+    if n and tid:
+        try:
+            cursor.execute("DELETE FROM trains WHERE train_id = ?", (tid,))
+            conn.commit()
+            if cursor.rowcount > 0:
+                return "✅ Train deleted successfully!", {'display': 'block'}
+            else:
+                return "❌ Train ID not found!", {'display': 'block'}
+        except Exception as e:
+            return "❌ Error deleting train!", {'display': 'block'}
+    return "", {'display': 'none'}
+
+@callback(
+    Output('trains-list', 'children'),
+    Input('search-btn', 'n_clicks'),
+    prevent_initial_call=False
+)
+def display_trains(n):
+    try:
+        df = pd.read_sql('SELECT * FROM trains', conn)
+        if df.empty:
+            return html.Div("No trains available", style={'textAlign': 'center', 'padding': '20px', 'color': '#7f8c8d'})
+        
+        trains = []
+        for _, row in df.iterrows():
+            train = html.Div([
+                html.H4(f"{row['train_name']} ({row['train_id']})", style={'color': '#0f3460', 'marginBottom': '10px'}),
+                html.P(f"🚂 Route: {row['source']} → {row['destination']}", style={'color': '#667eea', 'marginBottom': '8px'}),
+                html.P(f"⏰ Time: {row['departure_time']} - {row['arrival_time']}", style={'color': '#7f8c8d', 'marginBottom': '8px'}),
+                html.P(f"💺 Available Seats: {row['available_seats']}/{row['capacity']}", style={'color': '#27ae60', 'fontWeight': 'bold'})
+            ], style={'padding': '15px', 'marginBottom': '15px', 'border': '1px solid #e8eef5', 'borderRadius': '8px', 'backgroundColor': '#f8f9fa'})
+            trains.append(train)
+        
+        return html.Div(trains)
+    except:
+        return html.Div("Error loading trains", style={'textAlign': 'center', 'color': 'red'})
+
+@callback(
+    Output('buses-list', 'children'),
+    Input('search-btn', 'n_clicks'),
+    prevent_initial_call=False
+)
+def display_buses(n):
+    try:
+        df = pd.read_sql('SELECT * FROM buses', conn)
+        if df.empty:
+            return html.Div("No buses available", style={'textAlign': 'center', 'padding': '20px', 'color': '#7f8c8d'})
+        
+        buses = []
+        for _, row in df.iterrows():
+            bus = html.Div([
+                html.H4(f"{row['bus_name']} ({row['bus_id']})", style={'color': '#0f3460', 'marginBottom': '10px'}),
+                html.P(f"🚌 Route: {row['source']} → {row['destination']}", style={'color': '#e74c3c', 'marginBottom': '8px'}),
+                html.P(f"⏰ Time: {row['departure_time']} - {row['arrival_time']}", style={'color': '#7f8c8d', 'marginBottom': '8px'}),
+                html.P(f"💺 Available Seats: {row['available_seats']}/{row['capacity']}", style={'color': '#27ae60', 'fontWeight': 'bold'})
+            ], style={'padding': '15px', 'marginBottom': '15px', 'border': '1px solid #e8eef5', 'borderRadius': '8px', 'backgroundColor': '#f8f9fa'})
+            buses.append(bus)
+        
+        return html.Div(buses)
+    except:
+        return html.Div("Error loading buses", style={'textAlign': 'center', 'color': 'red'})
+
+@callback(
+    Output('metros-list', 'children'),
+    Input('search-btn', 'n_clicks'),
+    prevent_initial_call=False
+)
+def display_metros(n):
+    try:
+        df = pd.read_sql('SELECT * FROM metros', conn)
+        if df.empty:
+            return html.Div("No metro services available", style={'textAlign': 'center', 'padding': '20px', 'color': '#7f8c8d'})
+        
+        metros = []
+        for _, row in df.iterrows():
+            metro = html.Div([
+                html.H4(f"{row['metro_name']} ({row['metro_id']})", style={'color': '#0f3460', 'marginBottom': '10px'}),
+                html.P(f"🚇 Route: {row['source']} → {row['destination']}", style={'color': '#764ba2', 'marginBottom': '8px'}),
+                html.P(f"⏰ Time: {row['departure_time']} - {row['arrival_time']}", style={'color': '#7f8c8d', 'marginBottom': '8px'}),
+                html.P(f"💺 Available Seats: {row['available_seats']}/{row['capacity']}", style={'color': '#27ae60', 'fontWeight': 'bold'})
+            ], style={'padding': '15px', 'marginBottom': '15px', 'border': '1px solid #e8eef5', 'borderRadius': '8px', 'backgroundColor': '#f8f9fa'})
+            metros.append(metro)
+        
+        return html.Div(metros)
+    except:
+        return html.Div("Error loading metro services", style={'textAlign': 'center', 'color': 'red'})
+
+@callback(
+    Output('bus-msg', 'children'),
+    Output('bus-msg', 'style'),
+    Input('add-bus-btn', 'n_clicks'),
+    State('bus-id', 'value'),
+    State('bus-name', 'value'),
+    State('bus-from', 'value'),
+    State('bus-to', 'value'),
+    State('bus-dept', 'value'),
+    State('bus-arr', 'value'),
+    State('bus-capacity', 'value'),
+    prevent_initial_call=True
+)
+def add_bus(n, bid, name, source, dest, dept, arr, capacity):
+    if n and bid and name and source and dest and capacity:
+        try:
+            cursor.execute("INSERT INTO buses VALUES (?,?,?,?,?,?,?,?)", 
+                         (bid, name, source, dest, dept or '', arr or '', int(capacity), int(capacity)))
+            conn.commit()
+            return "✅ Bus added successfully!", {'display': 'block'}
+        except:
+            return "❌ Bus ID already exists!", {'display': 'block'}
+    return "", {'display': 'none'}
+
+@callback(
+    Output('metro-msg', 'children'),
+    Output('metro-msg', 'style'),
+    Input('add-metro-btn', 'n_clicks'),
+    State('metro-id', 'value'),
+    State('metro-name', 'value'),
+    State('metro-from', 'value'),
+    State('metro-to', 'value'),
+    State('metro-dept', 'value'),
+    State('metro-arr', 'value'),
+    State('metro-capacity', 'value'),
+    prevent_initial_call=True
+)
+def add_metro(n, mid, name, source, dest, dept, arr, capacity):
+    if n and mid and name and source and dest and capacity:
+        try:
+            cursor.execute("INSERT INTO metros VALUES (?,?,?,?,?,?,?,?)", 
+                         (mid, name, source, dest, dept or '', arr or '', int(capacity), int(capacity)))
+            conn.commit()
+            return "✅ Metro added successfully!", {'display': 'block'}
+        except:
+            return "❌ Metro ID already exists!", {'display': 'block'}
     return "", {'display': 'none'}
 
 if __name__ == '__main__':
